@@ -9,20 +9,18 @@ const PAY_AMOUNT = '1';
 exports.handler = function (event, context, callback) {
 
 	let resourcePath = event.resource;
-	let data = event.body;
+	let data = JSON.parse(event.body);
 
 	switch (resourcePath) {
 		case '/createPayment':
 			createPayment(data, callback);
 			break;
 		case '/executePayment':
+			executePayment(data, callback);
 			break;
 		default:
 			sendFailureResponse(callback);
 	}
-
-	console.log(event);
-	sendSuccessResponse(callback, event);
 }
 
 function getAccessToken() {
@@ -53,9 +51,8 @@ function createPayment(data, callback) {
 
 	let callbackUrl = data['callbackUrl'];
 
-	getAuthToken()
+	getAccessToken()
 		.then(accessToken => {
-			console.log(accessToken);
 			axios.post(`${PAYPAL_API_BASE_URL}/v1/payments/payment`,
 				{
 					"intent": "sale",
@@ -65,7 +62,7 @@ function createPayment(data, callback) {
 					"transactions": [
 						{
 							"amount": {
-								"total": PAY_AMOUNT,
+								"total": "1",
 								"currency": "USD",
 							},
 							"description": "SLAppForge Sigma 1-year premium subscription",
@@ -85,7 +82,7 @@ function createPayment(data, callback) {
 				.then(payPalResponse => {
 					let data = payPalResponse.data;
 					if (data && data['id']) {
-						console.log('Payment data', data);
+						console.log('Successfully created payment', data);
 						sendSuccessResponse(callback, {
 							paymentId: data['id']
 						});
@@ -100,6 +97,47 @@ function createPayment(data, callback) {
 				});
 		})
 		.catch((err) => {
+			console.log('Failed to get access token', err);
+			sendFailureResponse(callback);
+		});
+}
+
+function executePayment(data, callback) {
+
+	let paymentId = data['paymentId'];
+    let payertId = data['payerId'];
+
+	console.log('Executing payment', paymentId, payertId);
+
+    getAccessToken()
+        .then(accessToken => {
+            console.log(accessToken);
+            axios.post(`${PAYPAL_API_BASE_URL}/v1/payments/payment/${paymentId}/execute`,
+                {
+                    'payer_id': payertId
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                })
+                .then(payPalResponse => {
+                    let data = payPalResponse.data;
+					if (data['state'] === "approved") {
+						console.log('Successfully executed payment', data);
+						sendSuccessResponse(callback, {});
+					} else {
+						console.log('Payment execution failed', data);
+						sendFailureResponse(callback);
+					}
+                })
+                .catch(err => {
+                    console.log('Failed to execute payment', paymentId, payertId, err);
+					sendFailureResponse(callback);
+                });
+        })
+        .catch((err) => {
 			console.log('Failed to get access token', err);
 			sendFailureResponse(callback);
 		});
