@@ -161,8 +161,3 @@ function sendResponse(callback, data, statusCode) {
 		"body": JSON.stringify(data)
 	});
 };
-
-
-
-
-
